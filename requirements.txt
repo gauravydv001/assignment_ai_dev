@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+pydantic
+requests
+dateparser
+pytest
+pydantic-settings
+openai
+python-json-logger
+httpx

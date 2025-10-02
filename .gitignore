@@ -1,0 +1,5 @@
+AI_Bot_Service_Postman_Collection.json
+.env
+.venv/*
+.pytest_cache/
+__pycache__/

@@ -87,16 +87,34 @@ def parse_transcript(transcript: str) -> Dict[str, Any]:
     if any(keyword in lowered for keyword in ["visit", "appointment", "meeting", "schedule"]):
         entities = {}
         
-        # Look for lead ID - more flexible patterns
-        lead_match = re.search(r"(?:lead|for)\s+([0-9a-fA-F-]{8,})", text, re.IGNORECASE)
-        if lead_match:
-            entities["lead_id"] = lead_match.group(1).strip()
+        # Look for lead ID - more flexible patterns (UUID format and short IDs)  
+        lead_patterns = [
+            r"lead\s+([0-9a-fA-F-]{8,})",  # Long UUID-style IDs
+            r"lead\s+([a-zA-Z0-9-]{3,})",  # Short alphanumeric IDs (at least 3 chars)
+        ]
+        
+        for pattern in lead_patterns:
+            lead_match = re.search(pattern, text, re.IGNORECASE)
+            if lead_match:
+                lead_id = lead_match.group(1).strip()
+                # Make sure we didn't capture keywords
+                if lead_id.lower() not in ['at', 'on', 'for', 'with', 'and', 'or']:
+                    entities["lead_id"] = lead_id
+                    break
 
-        # Look for time information - more flexible patterns
+        # Look for time information - specific patterns to avoid capturing lead IDs
         time_patterns = [
-            r"(?:at|on|for)\s+(.+?)(?:\s+notes?|$)",  # "at 3 PM" or "tomorrow at 3 PM"
-            r"(tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+(?:at\s+)?(\d{1,2}(?:\s*(?:AM|PM))?)",  # "tomorrow 3 PM"
-            r"(\d{1,2}(?:\s*(?:AM|PM))?)",  # Just "3 PM"
+            # ISO format datetime (e.g., "2025-10-03T15:00:00")
+            r"(?:at|on)\s+(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})",
+            # Date with time (e.g., "2025-10-03 15:00", "October 3 3 PM")
+            r"(?:at|on)\s+(\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2})",
+            r"(?:at|on)\s+((?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2}\s+\d{1,2}\s*(?:AM|PM)?)",
+            # Relative dates with time (e.g., "tomorrow at 3 PM")
+            r"(tomorrow|today|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+(?:at\s+)?(\d{1,2}(?::\d{2})?\s*(?:AM|PM)?)",
+            # Just time (e.g., "at 3 PM", "at 15:00")
+            r"(?:at|on)\s+(\d{1,2}(?::\d{2})?\s*(?:AM|PM)?)",
+            # Simple time without keywords
+            r"(\d{1,2}:\d{2}(?:\s*(?:AM|PM))?)",
         ]
         
         time_text = None
@@ -109,12 +127,6 @@ def parse_transcript(transcript: str) -> Dict[str, Any]:
                 else:
                     time_text = time_match.group(1).strip()
                 break
-        
-        # If no specific time pattern found, look for any text after time keywords
-        if not time_text:
-            general_time_match = re.search(r"(?:tomorrow|today|at|on)\s+(.+?)(?:\s+notes?|$)", text, re.IGNORECASE)
-            if general_time_match:
-                time_text = general_time_match.group(1).strip()
 
         if time_text:
             parsed_time = dateparser.parse(time_text)
